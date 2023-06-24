@@ -7,7 +7,7 @@ midifier_controller_range = 196
 local midifier_aim_pitch_base = -25
 
 local plymeta = FindMetaTable("Player")
-print("LADWKLAWlDKL")
+
 function plymeta:SetActiveInstrument(instrument)
 	self.ActiveInstrument = instrument
 end
