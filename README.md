@@ -2,8 +2,131 @@
 The file 'weapon_the_instrument.lua' contains the bulk of the code
 
 
-The most important functions are Prepare Instrument Sound and Emit Instrument Sound:
+The most important functions are Prepare Instrument Sound, Emit Instrument Sound and Iterate Inputs:
 ```
+function SWEP:IterateInputs(ply,start,stop)
+	if stop == nil then
+		stop = start
+	end
+	
+	--Voice Chat
+	
+	local voice = input.IsKeyDown(KEY_LALT)
+	
+	
+	
+	if voice then
+		if not self.VoiceEnabled then
+			timer.Simple(0.05,function()permissions.EnableVoiceChat(true)end)
+		end
+		self.VoiceEnabled = true
+	else
+		if self.VoiceEnabled then
+			timer.Simple(0.05,function()permissions.EnableVoiceChat(false)end)
+		end
+		self.VoiceEnabled = false
+	end
+	
+	local update_last_beat = false
+	local update_last_sub_beat_chords = false
+	local update_last_sub_beat_notes = false
+	local update_arp_note = false
+	local arp_note_time = self.Config[self.setting_arp_delay]/self.Config[self.setting_arp_note_rate]
+
+	for k,v in pairs(self.ChordKeys) do
+		if not input.IsKeyDown(k) then
+			self.ChordPressTimes[k] = CurTime()
+		end
+	end
+	
+	local most_recent_chord_key = 0
+	local most_recent_chord_time = 0
+	for k,time in pairs(self.ChordPressTimes) do
+		if time > most_recent_chord_time and input.IsKeyDown(k) then
+			most_recent_chord_key = k
+			most_recent_chord_time = time
+		end
+	end
+	
+	
+	local sharp = input.IsKeyDown(KEY_SPACE)
+	
+	
+	local arp_dealy = self.Config[self.setting_arp_delay]
+	
+	local arp_chords = self.Config[self.setting_arp_chords]
+	local arp_chord_rate = self.Config[self.setting_arp_chord_rate]
+	
+	local arp_note_rate = self.Config[self.setting_arp_note_rate]
+	local arp_notes = self.Config[self.setting_arp_notes]
+	
+	
+	for key = start,stop do
+		if key == 57 then
+			continue
+		end
+		if input.IsKeyDown(key) then
+			self.PressedKeysHud[key] = true
+			if self.KeyIsChord[key] then
+				if arp_chords then
+					if key == most_recent_chord_key then
+						if self.LastBeat + arp_dealy <= CurTime() then
+							self:PrepareInstrumentSound(key,sharp)
+							self.LastArpChordTone = self.LastArpChordTone + 1
+							self.PressedKeys[key] = true
+							update_last_beat = true
+						elseif self.LastSubBeatChords + arp_dealy/arp_chord_rate <= CurTime() then
+							self:PrepareInstrumentSound(key,sharp)
+							self.LastArpChordTone = self.LastArpChordTone + 1
+							self.PressedKeys[key] = true
+							update_last_sub_beat_chords = true
+						end
+					end
+				else
+					if not self.PressedKeys[key] then
+						self:PrepareInstrumentSound(key,sharp)
+						self.PressedKeys[key] = true
+					end
+				end
+			else
+				if arp_notes then
+					if self.LastBeat + arp_dealy <= CurTime() then
+						self:PrepareInstrumentSound(key,sharp)
+						self.LastArpNoteTone = self.LastArpNoteTone + 1
+						self.PressedKeys[key] = true
+						update_last_beat = true
+					elseif self.LastSubBeatNotes + arp_dealy/arp_note_rate <= CurTime() then
+						self:PrepareInstrumentSound(key,sharp)
+						self.LastArpNoteTone = self.LastArpNoteTone + 1
+						self.PressedKeys[key] = true
+						update_last_sub_beat_notes = true
+					end
+				else
+					if not self.PressedKeys[key] then
+						self:PrepareInstrumentSound(key,sharp)
+						self.PressedKeys[key] = true
+					end
+				end
+			end
+			
+		else
+			self.PressedKeys[key] = false
+			self.PressedKeysHud[key] = false
+		end
+	end
+	if update_last_beat then
+		self.LastBeat = CurTime()
+		update_last_sub_beat_chords = true
+		update_last_sub_beat_notes = true
+	end
+	if update_last_sub_beat_chords then
+		self.LastSubBeatChords = CurTime()
+	end
+	if update_last_sub_beat_notes then
+		self.LastSubBeatNotes = CurTime()
+	end
+end
+
 function SWEP:PrepareInstrumentSound(key,sharp)
 	local own = self:GetOwner()
 	if IsValid(own) then
@@ -43,7 +166,6 @@ function SWEP:PrepareInstrumentSound(key,sharp)
 					local mode_offset = self.ModeTable[mode][2]
 					local chord_root = chord[1]+mode_offset
 					
-					-- LocalPlayer():ChatPrint(tostring(chord_root))
 					chord_type = self.ChordTable[chord[2]]
 					chord_tbl = chord_type[3]
 					local chord_deg_tbl = chord_type[4]
@@ -88,30 +210,19 @@ function SWEP:PrepareInstrumentSound(key,sharp)
 							local pitch,pitch_display = self:GetPitchFromDistance(distnace_from_c4)
 							local tone_degree = chord_deg_tbl[tone]
 							
-							-- print(,tone_degree,"/n")
 							local chord_degree_adjusted = (chord_degree+mode-1-1)%7+1
 							local degree = chord_degree+tone_degree-1
-							-- local degree = tone_degree
-							-- PrintTable(distance_degrees)
-							-- local degree = distance_degrees[mode][root_dist+tone_dist]
 							
 							if not skip then
-								-- LocalPlayer():ChatPrint("Trace 2")
-								--PLAY CHORD
 								self:EmitInstrumentSound(self.Config[self.setting_instrument_chord],pitch,distnace_from_c4,2,degree,pitch_display,self.Config[self.setting_vol_chord])
 								self.KeysLastPressed[distnace_from_c4] = CurTime()
 								self:UpdateKeyPressTime(key)
 							end
 							if tone == 1 and (not self.Config[self.setting_arp_chords] or last_arp_tone%(self.Config[self.setting_arp_bass_rate]*self.Config[self.setting_arp_chord_rate]) == 0) then
 								local chord_inversion_distance_from_root = chord[4]
-								-- LocalPlayer():ChatPrint(tostring(chord_inversion_distance_from_root))
 								if chord_inversion_distance_from_root != -100 then
 									bass_distance_from_c4 = root_dist+chord_inversion_distance_from_root-24+mode_offset
 								end
-								-- LocalPlayer():ChatPrint(tostring(bass_distance_from_c4))
-								-- if bass_distance_from_c4 < root_dist-24 then
-									-- bass_distance_from_c4 = bass_distance_from_c4+12
-								-- end
 								local bass_distance_from_c4_adjusted = bass_distance_from_c4
 								if bass_raise then
 									bass_distance_from_c4_adjusted = bass_distance_from_c4_adjusted + 12
@@ -123,8 +234,6 @@ function SWEP:PrepareInstrumentSound(key,sharp)
 								end
 								
 								local pitch,pitch_display = self:GetPitchFromDistance(bass_distance_from_c4_adjusted)
-								-- local degree = distance_degrees[mode][tone_dist]
-								-- LocalPlayer():ChatPrint("Trace 2")
 								--PLAY BASS
 								self:EmitInstrumentSound(self.Config[self.setting_instrument_bass],pitch,bass_distance_from_c4_adjusted,1,degree,pitch_display,self.Config[self.setting_vol_bass])
 								self.KeysLastPressed[bass_distance_from_c4_adjusted] = CurTime()
@@ -158,7 +267,6 @@ function SWEP:EmitInstrumentSound(inst,pitch,dist,inst_id,degree,pitch_display,v
 		pitch = pitch * 2
 	elseif pitch >= 100 and pitch < 200 then
 		dir_suffix = "/c4.wav"
-		-- pitch = pitch / 2
 	elseif pitch >= 200 and pitch < 400 then
 		dir_suffix = "/c5.wav"
 		pitch = pitch / 2
