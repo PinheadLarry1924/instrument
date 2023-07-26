@@ -2,7 +2,7 @@
 The file 'weapon_the_instrument.lua' contains the bulk of the code
 
 
-The most important function is:
+The most important function is Prepare Instrument Sound
 
 function SWEP:PrepareInstrumentSound(key,sharp)
 	local own = self:GetOwner()
