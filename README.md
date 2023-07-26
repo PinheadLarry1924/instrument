@@ -2,7 +2,7 @@
 The file 'weapon_the_instrument.lua' contains the bulk of the code
 
 
-The most important function is Prepare Instrument Sound
+The most important functions are Prepare Instrument Sound and Emit Instrument Sound:
 ```
 function SWEP:PrepareInstrumentSound(key,sharp)
 	local own = self:GetOwner()
@@ -137,4 +137,57 @@ function SWEP:PrepareInstrumentSound(key,sharp)
 		end
 	end
 end
+
+function SWEP:EmitInstrumentSound(inst,pitch,dist,inst_id,degree,pitch_display,volume)
+	local own = self:GetOwner()
+	if not IsValid(own) then
+		return
+	end
+	
+	pitch = pitch*100
+	local abs_pitch = pitch_display*100
+	
+	dir_prefix = "instrument/"
+	dir_suffix = "/c4.wav"
+	
+	if pitch < 50 then
+		dir_suffix = "/c2.wav"
+		pitch = pitch * 4
+	elseif pitch >= 50 and pitch < 100 then
+		dir_suffix = "/c3.wav"
+		pitch = pitch * 2
+	elseif pitch >= 100 and pitch < 200 then
+		dir_suffix = "/c4.wav"
+		-- pitch = pitch / 2
+	elseif pitch >= 200 and pitch < 400 then
+		dir_suffix = "/c5.wav"
+		pitch = pitch / 2
+	elseif pitch >= 400 then
+		dir_suffix = "/c6.wav"
+		pitch = pitch / 4
+	end
+	
+	local inst_tbl = self.Instruments[inst]
+	if inst_tbl == nil then
+		inst_tbl = self.Instruments[1]
+	end
+	sound_file = dir_prefix..inst_tbl[1]..dir_suffix
+	
+	
+	local speaker = nil
+	local pos = self:GetPos()
+	if self:GetClass() == midifier_seat_class then
+		speaker = self:GetController()
+		if IsValid(speaker) then
+			pos = speaker:WorldSpaceCenter()
+		end
+	end
+	
+	
+	sound.Play(sound_file,pos,75,pitch,volume)
+	self:SendInstrumentSoundToServer(sound_file,75,pitch,volume,CHAN_STATIC,own,abs_pitch,inst_id,degree,speaker)
+	self:UpdatePitchFireTime(abs_pitch,degree)
+	self:UpdateInstrumentFireTime(inst_id,abs_pitch,degree)
+end
+
 ```
